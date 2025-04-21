@@ -7,6 +7,7 @@
 
 require 'csv'
 require_relative 'buildstock'
+require 'fileutils'
 
 class RunSampling
   def run(project_dir_name, num_samples, outfile, housing_characteristics_dir = 'housing_characteristics', lookup_file = nil)
@@ -293,6 +294,7 @@ class RunSampling
   def write_csv(sample_results, outfile)
     # Writes the csv output file.
     out_file = File.absolute_path(File.join(File.dirname(__FILE__), outfile))
+    FileUtils.mkdir_p(File.dirname(out_file))
     CSV.open(out_file, 'w') do |csv_object|
       sample_results.each do |sample_result|
         csv_object << sample_result

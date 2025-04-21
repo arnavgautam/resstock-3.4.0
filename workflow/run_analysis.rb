@@ -14,7 +14,7 @@ require_relative '../resources/hpxml-measures/HPXMLtoOpenStudio/resources/util'
 
 $start_time = Time.now
 
-def run_workflow(yml, in_threads, measures_only, debug_arg, overwrite, building_ids, upgrade_names, keep_run_folders, samplingonly)
+def run_workflow(yml, in_threads, measures_only, debug_arg, overwrite, building_ids, upgrade_names, keep_run_folders, samplingonly, region_name, urbanization_level, num_datapoints, type_of_residence, baseline)
   if !File.exist?(yml)
     puts "Error: YML file does not exist at '#{yml}'."
     return false
@@ -37,8 +37,10 @@ def run_workflow(yml, in_threads, measures_only, debug_arg, overwrite, building_
     return false
   end
 
-  cfg_upgrade_names = ['Baseline']
-  cfg_upgrade_names += cfg['upgrades'].collect { |u| u['upgrade_name'] } if cfg.keys.include?('upgrades')
+  cfg_upgrade_names = baseline ? ['Baseline'] : []
+  if !baseline
+    cfg_upgrade_names += cfg['upgrades'].collect { |u| u['upgrade_name'] } if cfg.keys.include?('upgrades')
+  end
 
   invalid_upgrade_names = upgrade_names - cfg_upgrade_names
   if !invalid_upgrade_names.empty?
@@ -57,8 +59,14 @@ def run_workflow(yml, in_threads, measures_only, debug_arg, overwrite, building_
 
   buildstock_directory = cfg['buildstock_directory']
   project_directory = cfg['project_directory']
-  output_directory = cfg['output_directory']
-  n_datapoints = cfg['sampler']['args']['n_datapoints']
+  if type_of_residence.empty?
+    output_directory = cfg['output_directory']
+  elsif upgrades.length == 1 and upgrades[0] != 'Baseline'
+    output_directory = cfg['output_directory'] + ("_#{num_datapoints}_#{type_of_residence[0]}_unit_residence_#{upgrades[0]}")
+  else
+    output_directory = cfg['output_directory'] + ("_#{num_datapoints}_#{type_of_residence[0]}_unit_residence")
+  end
+  # n_datapoints = cfg['sampler']['args']['n_datapoints']
 
   if !(Pathname.new buildstock_directory).absolute?
     buildstock_directory = File.absolute_path(File.join(File.dirname(yml), buildstock_directory))
@@ -89,18 +97,18 @@ def run_workflow(yml, in_threads, measures_only, debug_arg, overwrite, building_
     # TODO: this should write directly to the results_dir...
     # run_sampling_lib::write_csv should not take a relative path relative to
     # the resources/run_sampling_lib.rb but an absolute path
-    create_buildstock_csv(project_directory, n_datapoints, outfile)
+    create_buildstock_csv(project_directory, num_datapoints, outfile)
     src = File.expand_path(File.join(File.dirname(__FILE__), '../lib/housing_characteristics/buildstock.csv'))
     buildstock_csv_path = File.join(results_dir, 'buildstock.csv')
     FileUtils.cp(src, buildstock_csv_path)
 
     return if samplingonly
 
-    datapoints = (1..n_datapoints).to_a
+    datapoints = (1..num_datapoints).to_a
   else
     # If buildstock_csv_path is absolute: just use that
     # If relative: relative to yml
-    buildstock_csv_path = cfg['sampler']['args']['sample_file']
+    buildstock_csv_path = type_of_residence.empty? ? cfg['sampler']['args']['sample_file'] : File.join("..", "resources", region_name, "#{urbanization_level[0]}_#{region_name[0]}_#{num_datapoints}_#{type_of_residence[0]}_unit_buildstock.csv")
     unless (Pathname.new buildstock_csv_path).absolute?
       buildstock_csv_path = File.expand_path(File.join(File.dirname(yml), buildstock_csv_path))
     end
@@ -135,7 +143,7 @@ def run_workflow(yml, in_threads, measures_only, debug_arg, overwrite, building_
   bld_exist_model_args = {
     'buildstock_csv_path': buildstock_csv_path,
     'building_id': '',
-    'sample_weight': Float(cfg['baseline']['n_buildings_represented']) / n_datapoints # aligns with buildstockbatch
+    'sample_weight': Float(cfg['baseline']['n_buildings_represented']) / num_datapoints # aligns with buildstockbatch
   }
 
   bld_exist_model_args.update(sim_ctl_args)
@@ -728,6 +736,31 @@ OptionParser.new do |opts|
     options[:overwrite] = true
   end
 
+  options[:region] = []
+  opts.on('-r', '--region region_name', 'Running for this region') do |t|
+    options[:region] << t
+  end
+
+  options[:urbanization] = []
+  opts.on('-z', '--urbanization urbanization_level', 'Running for this urbanization level') do |t|
+    options[:urbanization] << t
+  end
+
+  options[:num_datapoints] = 1
+  opts.on('-d', '--num_datapoints D', Integer, 'Number of datapoints') do |t|
+    options[:num_datapoints] = t
+  end
+
+  options[:type_of_residence] = []
+  opts.on('-t', '--type_of_residence type_name', 'Use this unit type') do |t|
+    options[:type_of_residence] << t
+  end
+
+  options[:baseline] = false
+  opts.on('-b', '--baseline', 'Only run the baseline') do |_t|
+    options[:baseline] = true
+  end
+
   opts.on_tail('-h', '--help', 'Display help') do
     puts opts
     exit!
@@ -748,7 +781,8 @@ else
   # Run analysis
   puts "YML: #{options[:yml]}"
   success = run_workflow(options[:yml], options[:threads], options[:measures_only], options[:debug], options[:overwrite],
-                         options[:building_ids], options[:upgrade_names], options[:keep_run_folders], options[:samplingonly])
+                         options[:building_ids], options[:upgrade_names], options[:keep_run_folders], options[:samplingonly],
+                         options[:region], options[:urbanization], options[:num_datapoints], options[:type_of_residence], options[:baseline])
 
   puts "\nCompleted in #{get_elapsed_time(Time.now, $start_time)}." if success
 end
