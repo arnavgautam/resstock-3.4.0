@@ -24,6 +24,17 @@ OptionParser.new do |opts|
     options[:outfile] = t
   end
 
+  options[:force_values] = nil
+  # Option to accept a hash string (e.g., '{"key1":"value1","key2":"value2"}')
+  opts.on("-fHASH", "--force_values=HASH", "Provide a hash in JSON format") do |hash_str|
+    begin
+      options[:force_values] = JSON.parse(hash_str)
+    rescue JSON::ParserError
+      puts "Invalid JSON format for hash input"
+      exit 1
+    end
+  end
+  
   opts.on_tail('-h', '--help', 'Display help') do
     puts opts
     exit!
@@ -37,7 +48,7 @@ end
 r = RunSampling.new
 
 t0 = Time.now
-r.run(options[:project], options[:numdps], options[:outfile])
+r.run(options[:project], options[:numdps], options[:outfile], options[:force_values])
 t1 = Time.now
 
 puts "Sampling took: #{((t1 - t0) / 60.0).round(1)} minutes."

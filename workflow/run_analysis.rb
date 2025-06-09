@@ -108,10 +108,12 @@ def run_workflow(yml, in_threads, measures_only, debug_arg, overwrite, building_
   else
     # If buildstock_csv_path is absolute: just use that
     # If relative: relative to yml
-    buildstock_csv_path = type_of_residence.empty? ? cfg['sampler']['args']['sample_file'] : File.join("..", "resources", region_name, "#{urbanization_level[0]}_#{region_name[0]}_#{num_datapoints}_#{type_of_residence[0]}_unit_buildstock.csv")
+    buildstock_csv_path = type_of_residence.empty? ? cfg['sampler']['args']['sample_file'] : File.join("..", "resources", "national", "#{region_name[0]}_#{urbanization_level[0]}_#{num_datapoints}_#{type_of_residence[0]}_unit_buildstock.csv")
     unless (Pathname.new buildstock_csv_path).absolute?
       buildstock_csv_path = File.expand_path(File.join(File.dirname(yml), buildstock_csv_path))
     end
+
+    puts buildstock_csv_path
 
     buildstock_csv = CSV.read(buildstock_csv_path, headers: true)
     datapoints = buildstock_csv['Building'].map { |x| Integer(x) }
